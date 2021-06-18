@@ -85,8 +85,8 @@ class AbstractIntegrationSpec extends Specification {
 
     M2Installation m2 = new M2Installation(temporaryFolder)
 
-    ExecutionResult result
-    ExecutionFailure failure
+    private ExecutionResult result_
+    private ExecutionFailure failure_
     public final MavenFileRepository mavenRepo = new MavenFileRepository(temporaryFolder.testDirectory.file("maven-repo"))
     public final IvyFileRepository ivyRepo = new IvyFileRepository(temporaryFolder.testDirectory.file("ivy-repo"))
 
@@ -312,14 +312,32 @@ class AbstractIntegrationSpec extends Specification {
         return result
     }
 
+    ExecutionResult getResult() {
+        if (result_ == null) {
+            throw new IllegalStateException("No build result is available yet.")
+        }
+        return result_
+    }
+
+    ExecutionResult getResultOrNull() {
+        return result_
+    }
+
     void setResult(ExecutionResult result) {
-        failure = null
-        this.result = result
+        failure_ = null
+        result_ = result
+    }
+
+    ExecutionFailure getFailure() {
+        if (failure_ == null) {
+            throw new IllegalStateException("No build failure result is available yet.")
+        }
+        return failure_
     }
 
     void setFailure(ExecutionFailure failure) {
-        result = failure
-        this.failure = failure
+        result_ = failure
+        failure_ = failure
     }
 
     protected ExecutionFailure runAndFail(String... tasks) {

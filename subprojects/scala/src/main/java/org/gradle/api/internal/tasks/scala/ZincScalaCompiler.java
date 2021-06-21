@@ -74,6 +74,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+@SuppressWarnings("deprecation")
 public class ZincScalaCompiler implements Compiler<ScalaJavaJointCompileSpec> {
     private static final Logger LOGGER = Logging.getLogger(ZincScalaCompiler.class);
 

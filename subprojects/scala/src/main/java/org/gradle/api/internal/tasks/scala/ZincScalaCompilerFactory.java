@@ -55,6 +55,7 @@ import java.util.concurrent.Callable;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
+@SuppressWarnings("deprecation")
 public class ZincScalaCompilerFactory {
     private static final Logger LOGGER = Logging.getLogger(ZincScalaCompilerFactory.class);
     private static final int CLASSLOADER_CACHE_SIZE = 4;

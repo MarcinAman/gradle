@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
  *
  * Cache is based on file timestamps, because this method is used in sbt implementation.
  */
+@SuppressWarnings("deprecation")
 class TimeCheckingClassLoaderCache implements AbstractClassLoaderCache {
     private final URLClassLoader commonParent;
     private final GuavaBackedClassLoaderCache<Set<TimestampedFile>> cache;

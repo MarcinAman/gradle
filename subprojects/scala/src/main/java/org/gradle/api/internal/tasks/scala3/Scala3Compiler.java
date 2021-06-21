@@ -17,7 +17,7 @@
 package org.gradle.api.internal.tasks.scala3;
 
 import com.google.common.collect.Iterables;
-import dotty.tools.dotc.core.Contexts;
+//import dotty.tools.dotc.core.Contexts;
 import dotty.tools.dotc.interfaces.Diagnostic;
 import org.gradle.api.internal.tasks.scala.ScalaJavaJointCompileSpec;
 import org.gradle.api.logging.Logger;

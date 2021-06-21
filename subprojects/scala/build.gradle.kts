@@ -28,6 +28,7 @@ dependencies {
     implementation(libs.inject)
 
     compileOnly("org.scala-sbt:zinc_2.12:1.3.5")
+    implementation("org.scala-lang:scala3-compiler_3:3.0.1-RC1")
 
     testImplementation(project(":base-services-groovy"))
     testImplementation(project(":files"))

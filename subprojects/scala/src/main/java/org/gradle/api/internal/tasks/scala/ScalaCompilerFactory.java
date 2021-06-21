@@ -18,6 +18,7 @@ package org.gradle.api.internal.tasks.scala;
 
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.ClassPathRegistry;
+import org.gradle.api.internal.tasks.scala3.Scala3Compiler;
 import org.gradle.initialization.ClassLoaderRegistry;
 import org.gradle.internal.classloader.ClasspathHasher;
 import org.gradle.internal.classpath.DefaultClassPath;
@@ -66,7 +67,7 @@ public class ScalaCompilerFactory implements CompilerFactory<ScalaJavaJointCompi
 
         // currently, we leave it to ZincScalaCompiler to also compile the Java code
         Compiler<ScalaJavaJointCompileSpec> scalaCompiler = new DaemonScalaCompiler<>(
-            daemonWorkingDir, ZincScalaCompilerFacade.class, new Object[] {hashedScalaClasspath},
+            daemonWorkingDir, Scala3Compiler.class, new Object[] {},
             workerDaemonFactory, zincClasspathFiles, forkOptionsFactory, classPathRegistry, classLoaderRegistry, actionExecutionSpecFactory);
         return new NormalizingScalaCompiler(scalaCompiler);
     }

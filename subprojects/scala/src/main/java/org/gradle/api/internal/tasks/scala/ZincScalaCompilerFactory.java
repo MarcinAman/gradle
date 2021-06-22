@@ -29,7 +29,7 @@ import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
 import sbt.internal.inc.AnalyzingCompiler;
-import sbt.internal.inc.AnalyzingCompiler$;
+//import sbt.internal.inc.AnalyzingCompiler$;
 import sbt.internal.inc.RawCompiler;
 import sbt.internal.inc.ScalaInstance;
 import sbt.internal.inc.ZincUtil;
@@ -55,6 +55,7 @@ import java.util.concurrent.Callable;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
+@SuppressWarnings("deprecation")
 public class ZincScalaCompilerFactory {
     private static final Logger LOGGER = Logging.getLogger(ZincScalaCompilerFactory.class);
     private static final int CLASSLOADER_CACHE_SIZE = 4;
@@ -169,7 +170,8 @@ public class ZincScalaCompilerFactory {
                 RawCompiler rawCompiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.manual(), logger);
                 scala.collection.Iterable<File> sourceJars = JavaConverters.collectionAsScalaIterable(Collections.singletonList(compilerBridgeSourceJar));
                 scala.collection.Iterable<File> xsbtiJars = JavaConverters.collectionAsScalaIterable(Arrays.asList(scalaInstance.allJars()));
-                AnalyzingCompiler$.MODULE$.compileSources(sourceJars, bridgeJar, xsbtiJars, "compiler-bridge", rawCompiler, logger);
+                /* TODO: One of the difference is where you get the compiler-bridge from. In Scala 2, you are supposed to build one on user's machine from source. With Scala 3 they provide a binary for it. */
+//                AnalyzingCompiler$.MODULE$.compileSources(sourceJars, bridgeJar, xsbtiJars, "compiler-bridge", rawCompiler, logger);
 
                 final String interfaceCompletedMessage = String.format("Scala Compiler interface compilation took %s", timer.getElapsed());
                 if (timer.getElapsedMillis() > 30000) {

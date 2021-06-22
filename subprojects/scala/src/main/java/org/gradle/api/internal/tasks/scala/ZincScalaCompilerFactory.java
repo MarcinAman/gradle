@@ -17,6 +17,7 @@
 package org.gradle.api.internal.tasks.scala;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Iterators;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.cache.CacheRepository;
@@ -29,14 +30,14 @@ import org.gradle.internal.jvm.Jvm;
 import org.gradle.internal.time.Time;
 import org.gradle.internal.time.Timer;
 import sbt.internal.inc.AnalyzingCompiler;
-//import sbt.internal.inc.AnalyzingCompiler$;
+import sbt.internal.inc.AnalyzingCompiler$;
 import sbt.internal.inc.RawCompiler;
 import sbt.internal.inc.ScalaInstance;
+import sbt.internal.inc.ScalaInstance$;
 import sbt.internal.inc.ZincUtil;
 import sbt.internal.inc.classpath.ClassLoaderCache;
 import scala.Option;
 import scala.collection.JavaConverters;
-import xsbti.ArtifactInfo;
 import xsbti.compile.ClasspathOptionsUtil;
 import xsbti.compile.ScalaCompiler;
 import xsbti.compile.ZincCompilerUtil;
@@ -46,12 +47,15 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
@@ -92,6 +96,7 @@ public class ZincScalaCompilerFactory {
         ScalaInstance scalaInstance = getScalaInstance(hashedScalaClasspath);
         String zincVersion = ZincCompilerUtil.class.getPackage().getImplementationVersion();
         String scalaVersion = scalaInstance.actualVersion();
+        LOGGER.warn("Using scala version: " + scalaVersion + " isDotty: " + ScalaInstance$.MODULE$.isDotty(scalaVersion));
         String javaVersion = Jvm.current().getJavaVersion().getMajorVersion();
         String zincCacheKey = String.format("zinc-%s_%s_%s", zincVersion, scalaVersion, javaVersion);
         String zincCacheName = String.format("%s compiler cache", zincCacheKey);
@@ -100,7 +105,7 @@ public class ZincScalaCompilerFactory {
             .withLockOptions(mode(FileLockManager.LockMode.OnDemand))
             .open();
 
-        File compilerBridgeSourceJar = findFile("compiler-bridge", hashedScalaClasspath.getClasspath());
+        File compilerBridgeSourceJar = findFile("scala3-sbt-bridge", hashedScalaClasspath.getClasspath());
         File bridgeJar = getBridgeJar(zincCache, scalaInstance, compilerBridgeSourceJar, sbt.util.Logger.xlog2Log(new SbtLoggerAdapter()));
 
         ScalaCompiler scalaCompiler = new AnalyzingCompiler(
@@ -144,8 +149,8 @@ public class ZincScalaCompilerFactory {
         String scalaVersion = getScalaVersion(scalaClassLoader);
         ClassPath scalaClasspath = hashedScalaClasspath.getClasspath();
 
-        File libraryJar = findFile(ArtifactInfo.ScalaLibraryID, scalaClasspath);
-        File compilerJar = findFile(ArtifactInfo.ScalaCompilerID, scalaClasspath);
+        File libraryJar = findFile("scala3-library_3", scalaClasspath);
+        File compilerJar = findFile("scala3-compiler_3", scalaClasspath);
 
         return new ScalaInstance(
             scalaVersion,
@@ -168,10 +173,12 @@ public class ZincScalaCompilerFactory {
                 // generate from sources jar
                 final Timer timer = Time.startTimer();
                 RawCompiler rawCompiler = new RawCompiler(scalaInstance, ClasspathOptionsUtil.manual(), logger);
-                scala.collection.Iterable<File> sourceJars = JavaConverters.collectionAsScalaIterable(Collections.singletonList(compilerBridgeSourceJar));
-                scala.collection.Iterable<File> xsbtiJars = JavaConverters.collectionAsScalaIterable(Arrays.asList(scalaInstance.allJars()));
+                scala.collection.Iterable<Path> sourceJars = JavaConverters.collectionAsScalaIterable(Collections.singletonList(compilerBridgeSourceJar.toPath()));
+
+                List<Path> allXsbtiJars = Arrays.stream(scalaInstance.allJars()).map(File::toPath).collect(Collectors.toList());
+                scala.collection.Iterable<Path> xsbtiJars = JavaConverters.collectionAsScalaIterable(allXsbtiJars);
                 /* TODO: One of the difference is where you get the compiler-bridge from. In Scala 2, you are supposed to build one on user's machine from source. With Scala 3 they provide a binary for it. */
-//                AnalyzingCompiler$.MODULE$.compileSources(sourceJars, bridgeJar, xsbtiJars, "compiler-bridge", rawCompiler, logger);
+                AnalyzingCompiler$.MODULE$.compileSources(sourceJars, bridgeJar.toPath(), xsbtiJars, "compiler-bridge", rawCompiler, logger);
 
                 final String interfaceCompletedMessage = String.format("Scala Compiler interface compilation took %s", timer.getElapsed());
                 if (timer.getElapsedMillis() > 30000) {

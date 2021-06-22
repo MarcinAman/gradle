@@ -60,7 +60,7 @@ import java.util.regex.Pattern;
  * </pre>
  */
 public class ScalaRuntime {
-    private static final Pattern SCALA_JAR_PATTERN = Pattern.compile("scala-(\\w.*?)-(\\d.*).jar");
+    private static final Pattern SCALA_JAR_PATTERN = Pattern.compile("scala3-(\\w.*?)-(\\d.*).jar");
 
     private final Project project;
     private final JvmEcosystemUtilities jvmEcosystemUtilities;
@@ -111,8 +111,8 @@ public class ScalaRuntime {
 
                 String zincVersion = project.getExtensions().getByType(ScalaPluginExtension.class).getZincVersion().get();
 
-                String scalaMajorMinorVersion = Joiner.on('.').join(Splitter.on('.').splitToList(scalaVersion).subList(0, 2));
-                DefaultExternalModuleDependency compilerBridgeJar = new DefaultExternalModuleDependency("org.scala-sbt", "compiler-bridge_" + scalaMajorMinorVersion, zincVersion);
+//                String scalaMajorMinorVersion = Joiner.on('.').join(Splitter.on('.').splitToList(scalaVersion).subList(0, 2));
+                DefaultExternalModuleDependency compilerBridgeJar = new DefaultExternalModuleDependency("org.scala-lang", "scala3-sbt-bridge", scalaVersion);
                 compilerBridgeJar.setTransitive(false);
                 compilerBridgeJar.artifact(artifact -> {
                     artifact.setClassifier("sources");
@@ -121,7 +121,7 @@ public class ScalaRuntime {
                     artifact.setName(compilerBridgeJar.getName());
                 });
                 DefaultExternalModuleDependency compilerInterfaceJar = new DefaultExternalModuleDependency("org.scala-sbt", "compiler-interface", zincVersion);
-                Configuration scalaRuntimeClasspath = project.getConfigurations().detachedConfiguration(new DefaultExternalModuleDependency("org.scala-lang", "scala-compiler", scalaVersion), compilerBridgeJar, compilerInterfaceJar);
+                Configuration scalaRuntimeClasspath = project.getConfigurations().detachedConfiguration(new DefaultExternalModuleDependency("org.scala-lang", "scala3-compiler_3", scalaVersion), compilerBridgeJar, compilerInterfaceJar);
                 jvmEcosystemUtilities.configureAsRuntimeClasspath(scalaRuntimeClasspath);
                 return scalaRuntimeClasspath;
             }
@@ -149,7 +149,7 @@ public class ScalaRuntime {
     public File findScalaJar(Iterable<File> classpath, String appendix) {
         for (File file : classpath) {
             Matcher matcher = SCALA_JAR_PATTERN.matcher(file.getName());
-            if (matcher.matches() && matcher.group(1).equals(appendix)) {
+            if (matcher.matches() && matcher.group(1).contains(appendix)) {
                 return file;
             }
         }

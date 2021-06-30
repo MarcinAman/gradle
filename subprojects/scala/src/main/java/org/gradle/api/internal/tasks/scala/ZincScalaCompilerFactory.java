@@ -47,7 +47,9 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -55,7 +57,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
@@ -105,8 +106,18 @@ public class ZincScalaCompilerFactory {
             .withLockOptions(mode(FileLockManager.LockMode.OnDemand))
             .open();
 
-        File compilerBridgeSourceJar = findFile("scala3-sbt-bridge", hashedScalaClasspath.getClasspath());
-        File bridgeJar = getBridgeJar(zincCache, scalaInstance, compilerBridgeSourceJar, sbt.util.Logger.xlog2Log(new SbtLoggerAdapter()));
+        File classpathBridgeJar = findFile("scala3-sbt-bridge", hashedScalaClasspath.getClasspath());
+
+        File bridgeJar = new File(zincCache.getBaseDir(), "compiler-bridge.jar");
+        if (!bridgeJar.exists()) {
+            zincCache.useCache(() -> {
+                try {
+                    Files.copy(classpathBridgeJar.toPath(), (new File(zincCache.getBaseDir(), "compiler-bridge.jar")).toPath(), StandardCopyOption.REPLACE_EXISTING).toFile();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
+        }
 
         ScalaCompiler scalaCompiler = new AnalyzingCompiler(
             scalaInstance,

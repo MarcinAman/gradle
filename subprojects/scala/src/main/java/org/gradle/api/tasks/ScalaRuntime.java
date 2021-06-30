@@ -115,7 +115,6 @@ public class ScalaRuntime {
                 DefaultExternalModuleDependency compilerBridgeJar = new DefaultExternalModuleDependency("org.scala-lang", "scala3-sbt-bridge", scalaVersion);
                 compilerBridgeJar.setTransitive(false);
                 compilerBridgeJar.artifact(artifact -> {
-                    artifact.setClassifier("sources");
                     artifact.setType("jar");
                     artifact.setExtension("jar");
                     artifact.setName(compilerBridgeJar.getName());

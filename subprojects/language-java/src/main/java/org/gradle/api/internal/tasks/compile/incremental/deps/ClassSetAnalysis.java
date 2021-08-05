@@ -25,8 +25,8 @@ import it.unimi.dsi.fastutil.ints.IntSets;
 import it.unimi.dsi.fastutil.objects.ObjectOpenHashSet;
 import org.gradle.api.internal.tasks.compile.incremental.compilerapi.CompilerApiData;
 import org.gradle.api.internal.tasks.compile.incremental.compilerapi.deps.DependentsSet;
-import org.gradle.api.internal.tasks.compile.incremental.processing.AnnotationProcessingData;
 import org.gradle.api.internal.tasks.compile.incremental.compilerapi.deps.GeneratedResource;
+import org.gradle.api.internal.tasks.compile.incremental.processing.AnnotationProcessingData;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
@@ -38,6 +38,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import static org.gradle.api.internal.tasks.compile.incremental.deps.ClassSetAnalysisData.MODULE_INFO;
+
 
 /**
  * An extension of {@link ClassSetAnalysisData}, which can also handle annotation processing.
@@ -159,10 +162,13 @@ public class ClassSetAnalysis {
         }
         Set<String> classesDependingOnAllOthers = annotationProcessingData.participatesInClassGeneration(className) ? annotationProcessingData.getGeneratedTypesDependingOnAllOthers() : Collections.emptySet();
         Set<GeneratedResource> resourcesDependingOnAllOthers = annotationProcessingData.participatesInResourceGeneration(className) ? annotationProcessingData.getGeneratedResourcesDependingOnAllOthers() : Collections.emptySet();
-        Set<String> accessibleConstantDependents = new ObjectOpenHashSet<>(compilerApiData.getConstantDependentsForClass(className).getAccessibleDependentClasses());
-        Set<String> privateConstantDependents = new ObjectOpenHashSet<>(compilerApiData.getConstantDependentsForClass(className).getPrivateDependentClasses());
-        processTransitiveConstantDependentClasses(new ObjectOpenHashSet<>(Collections.singleton(className)), privateConstantDependents, accessibleConstantDependents);
-        if (!deps.hasDependentClasses() && classesDependingOnAllOthers.isEmpty() && resourcesDependingOnAllOthers.isEmpty() && accessibleConstantDependents.isEmpty() && privateConstantDependents.isEmpty()) {
+
+        DependentsSet constantDeps = getConstantDependents(className);
+        if (constantDeps.isDependencyToAll()) {
+            return constantDeps;
+        }
+
+        if (!deps.hasDependentClasses() && classesDependingOnAllOthers.isEmpty() && resourcesDependingOnAllOthers.isEmpty() && !constantDeps.hasDependentClasses()) {
             return deps;
         }
 
@@ -173,7 +179,7 @@ public class ClassSetAnalysis {
         Set<GeneratedResource> resultResources = new HashSet<>(resourcesDependingOnAllOthers);
         processDependentClasses(new HashSet<>(), privateResultClasses, accessibleResultClasses, resultResources, deps.getPrivateDependentClasses(), dependents);
         processDependentClasses(new HashSet<>(), privateResultClasses, accessibleResultClasses, resultResources, Collections.emptySet(), classesDependingOnAllOthers);
-        processDependentClasses(new HashSet<>(), privateResultClasses, accessibleResultClasses, resultResources, privateConstantDependents, accessibleConstantDependents);
+        processDependentClasses(new HashSet<>(), privateResultClasses, accessibleResultClasses, resultResources, constantDeps.getPrivateDependentClasses(), constantDeps.getAccessibleDependentClasses());
         accessibleResultClasses.remove(className);
         privateResultClasses.remove(className);
 
@@ -259,6 +265,16 @@ public class ClassSetAnalysis {
             Sets.union(dependents.getAccessibleDependentClasses(), annotationProcessingClassDeps),
             Sets.union(dependents.getDependentResources(), annotationProcessingResourceDeps)
         );
+    }
+
+    private DependentsSet getConstantDependents(String className) {
+        Set<String> accessibleConstantDependents = new ObjectOpenHashSet<>(compilerApiData.getConstantDependentsForClass(className).getAccessibleDependentClasses());
+        Set<String> privateConstantDependents = new ObjectOpenHashSet<>(compilerApiData.getConstantDependentsForClass(className).getPrivateDependentClasses());
+        processTransitiveConstantDependentClasses(new ObjectOpenHashSet<>(Collections.singleton(className)), privateConstantDependents, accessibleConstantDependents);
+        if (accessibleConstantDependents.contains(MODULE_INFO)) {
+            return DependentsSet.dependencyToAll("module-info has changed");
+        }
+        return DependentsSet.dependents(privateConstantDependents, accessibleConstantDependents, Collections.emptySet());
     }
 
     private void processTransitiveConstantDependentClasses(Set<Object> visited, Set<String> privateConstantDependents, Set<String> accessibleConstantDependents) {

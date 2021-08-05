@@ -16,7 +16,6 @@
 
 package org.gradle.internal.reflect.validation
 
-import groovy.transform.CompileStatic
 import org.gradle.api.internal.DocumentationRegistry
 import org.gradle.integtests.fixtures.executer.GradleExecuter
 import org.gradle.internal.reflect.JavaReflectionUtil
@@ -24,7 +23,8 @@ import org.gradle.internal.reflect.problems.ValidationProblemId
 
 import static org.gradle.internal.reflect.validation.TypeValidationProblemRenderer.convertToSingleLine
 
-@CompileStatic
+// https://issues.apache.org/jira/browse/GROOVY-10055
+//@CompileStatic
 trait ValidationMessageChecker {
     private final DocumentationRegistry documentationRegistry = new DocumentationRegistry()
 
@@ -342,6 +342,17 @@ trait ValidationMessageChecker {
             .reason(config.reason)
             .solution(config.solution)
             .render(renderSolutions)
+    }
+
+    @ValidationTestFor(
+        ValidationProblemId.NOT_CACHEABLE_WITHOUT_REASON
+    )
+    String notCacheableWithoutReason(@DelegatesTo(value = NotCacheableWithoutReason, strategy = Closure.DELEGATE_FIRST) Closure<?> spec) {
+        def config = display(NotCacheableWithoutReason, "disable_caching_by_default", spec)
+        config.description("must be annotated either with ${config.cacheableAnnotation} or with @DisableCachingByDefault.")
+            .reason("The ${config.workType} author should make clear why a ${config.workType} is not cacheable.")
+            .solution("Add @DisableCachingByDefault(because = ...) or ${config.cacheableAnnotation}.")
+            .render()
     }
 
     @ValidationTestFor(
@@ -845,4 +856,26 @@ trait ValidationMessageChecker {
             this
         }
     }
+
+    static class NotCacheableWithoutReason extends ValidationMessageDisplayConfiguration<NotCacheableWithoutReason> {
+        String workType
+        String cacheableAnnotation
+
+        NotCacheableWithoutReason(ValidationMessageChecker checker) {
+            super(checker)
+        }
+
+        NotCacheableWithoutReason noReasonOnTask() {
+            workType = "task"
+            cacheableAnnotation = "@CacheableTask"
+            this
+        }
+
+        NotCacheableWithoutReason noReasonOnArtifactTransform() {
+            workType = "transform action"
+            cacheableAnnotation = "@CacheableTransform"
+            this
+        }
+    }
+
 }

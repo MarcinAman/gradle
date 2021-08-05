@@ -46,6 +46,9 @@ import org.intellij.lang.annotations.Language
 import org.junit.Rule
 import spock.lang.Specification
 
+import javax.annotation.Nullable
+import java.nio.file.Files
+
 import static org.gradle.integtests.fixtures.timeout.IntegrationTestTimeout.DEFAULT_TIMEOUT_SECONDS
 import static org.gradle.test.fixtures.dsl.GradleDsl.GROOVY
 import static org.gradle.util.Matchers.normalizedLineSeparators
@@ -62,6 +65,7 @@ class AbstractIntegrationSpec extends Specification {
 
     @Rule
     public final TestNameTestDirectoryProvider temporaryFolder = new TestNameTestDirectoryProvider(getClass())
+    private TestFile testDirOverride = null
 
     GradleDistribution distribution = new UnderDevelopmentGradleDistribution(getBuildContext())
     private GradleExecuter executor
@@ -85,8 +89,8 @@ class AbstractIntegrationSpec extends Specification {
 
     M2Installation m2 = new M2Installation(temporaryFolder)
 
-    ExecutionResult result
-    ExecutionFailure failure
+    private ExecutionResult currentResult
+    private ExecutionFailure currentFailure
     public final MavenFileRepository mavenRepo = new MavenFileRepository(temporaryFolder.testDirectory.file("maven-repo"))
     public final IvyFileRepository ivyRepo = new IvyFileRepository(temporaryFolder.testDirectory.file("ivy-repo"))
 
@@ -203,6 +207,9 @@ class AbstractIntegrationSpec extends Specification {
     }
 
     TestFile getTestDirectory() {
+        if (testDirOverride != null) {
+            return testDirOverride
+        }
         temporaryFolder.testDirectory
     }
 
@@ -287,6 +294,33 @@ class AbstractIntegrationSpec extends Specification {
         executer
     }
 
+    /**
+     * Configure the test directory so that there is no settings.gradle(.kts) anywhere in its hierarchy.
+     * By default, tests will run under the `build` directory and so a settings.gradle will be present. Most tests do not care but some are sensitive to this.
+     */
+    void useTestDirectoryThatIsNotEmbeddedInAnotherBuild() {
+        def undefinedBuildDirectory = Files.createTempDirectory("gradle").toFile()
+        testDirOverride = new TestFile(undefinedBuildDirectory)
+        assertNoDefinedBuild(testDirectory)
+        executer.beforeExecute {
+            executer.inDirectory(testDirectory)
+            executer.ignoreMissingSettingsFile()
+        }
+    }
+
+    void assertNoDefinedBuild(TestFile testDirectory) {
+        testDirectory.file(".gradle").assertDoesNotExist()
+        def currentDirectory = testDirectory
+        for (; ;) {
+            currentDirectory.file(settingsFileName).assertDoesNotExist()
+            currentDirectory.file(settingsKotlinFileName).assertDoesNotExist()
+            currentDirectory = currentDirectory.parentFile
+            if (currentDirectory == null) {
+                break
+            }
+        }
+    }
+
     AbstractIntegrationSpec withBuildCache() {
         executer.withBuildCacheEnabled()
         this
@@ -309,6 +343,41 @@ class AbstractIntegrationSpec extends Specification {
 
     protected ExecutionResult succeeds(String... tasks) {
         result = executer.withTasks(*tasks).run()
+        return result
+    }
+
+    ExecutionResult getResult() {
+        if (currentResult == null) {
+            throw new IllegalStateException("No build result is available yet.")
+        }
+        return currentResult
+    }
+
+    @Nullable
+    ExecutionResult getResultOrNull() {
+        return currentResult
+    }
+
+    void setResult(ExecutionResult result) {
+        currentFailure = null
+        currentResult = result
+    }
+
+    ExecutionFailure getFailure() {
+        if (currentFailure == null) {
+            throw new IllegalStateException("No build failure result is available yet.")
+        }
+        return currentFailure
+    }
+
+    @Nullable
+    ExecutionFailure getFailureOrNull() {
+        return currentFailure
+    }
+
+    void setFailure(ExecutionFailure failure) {
+        currentResult = failure
+        currentFailure = failure
     }
 
     protected ExecutionFailure runAndFail(String... tasks) {
@@ -317,7 +386,7 @@ class AbstractIntegrationSpec extends Specification {
 
     protected ExecutionFailure fails(String... tasks) {
         failure = executer.withTasks(*tasks).runWithFailure()
-        result = failure
+        return failure
     }
 
     protected void executedAndNotSkipped(String... tasks) {

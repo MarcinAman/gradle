@@ -35,10 +35,12 @@ import org.gradle.initialization.layout.BuildLayout;
 import org.gradle.internal.InternalBuildAdapter;
 import org.gradle.internal.Pair;
 import org.gradle.internal.build.AbstractBuildState;
+import org.gradle.internal.build.BuildLayoutValidator;
 import org.gradle.internal.build.BuildLifecycleController;
 import org.gradle.internal.build.BuildLifecycleControllerFactory;
 import org.gradle.internal.build.BuildState;
 import org.gradle.internal.build.BuildStateRegistry;
+import org.gradle.internal.build.BuildWorkGraph;
 import org.gradle.internal.build.NestedRootBuild;
 import org.gradle.internal.buildtree.BuildTreeFinishExecutor;
 import org.gradle.internal.buildtree.BuildTreeLifecycleController;
@@ -95,25 +97,37 @@ public class RootOfNestedBuildTree extends AbstractBuildState implements NestedR
 
         session = new BuildSessionState(userHomeDirServiceRegistry, crossBuildSessionState, startParameter, buildRequestMetaData, ClassPath.EMPTY, buildCancellationToken, buildRequestMetaData.getClient(), new NoOpBuildEventConsumer());
 
+        session.getServices().get(BuildLayoutValidator.class).validate(startParameter);
+
         BuildTreeModelControllerServices.Supplier modelServices = session.getServices().get(BuildTreeModelControllerServices.class).servicesForNestedBuildTree(startParameter);
         buildTree = new BuildTreeState(session.getServices(), modelServices);
 
         // Create the controllers using the services of the nested tree
         BuildLifecycleControllerFactory buildLifecycleControllerFactory = buildTree.getServices().get(BuildLifecycleControllerFactory.class);
         buildServices = new BuildScopeServices(buildTree.getServices());
-        this.buildLifecycleController = buildLifecycleControllerFactory.newInstance(buildDefinition, this, owner.getMutableModel(), buildServices);
+        this.buildLifecycleController = buildLifecycleControllerFactory.newInstance(buildDefinition, this, owner, buildServices);
 
         BuildTreeLifecycleControllerFactory buildTreeLifecycleControllerFactory = buildServices.get(BuildTreeLifecycleControllerFactory.class);
-        IncludedBuildControllers controllers = buildServices.get(IncludedBuildControllers.class);
+        IncludedBuildTaskGraph controllers = buildServices.get(IncludedBuildTaskGraph.class);
         ExceptionAnalyser exceptionAnalyser = buildServices.get(ExceptionAnalyser.class);
         BuildStateRegistry buildStateRegistry = buildServices.get(BuildStateRegistry.class);
         BuildTreeWorkExecutor buildTreeWorkExecutor = new DefaultBuildTreeWorkExecutor(controllers, buildLifecycleController);
-        BuildTreeFinishExecutor buildTreeFinishExecutor = new DefaultBuildTreeFinishExecutor(controllers, buildStateRegistry, exceptionAnalyser, buildLifecycleController);
+        BuildTreeFinishExecutor buildTreeFinishExecutor = new DefaultBuildTreeFinishExecutor(buildStateRegistry, exceptionAnalyser, buildLifecycleController);
         buildTreeLifecycleController = buildTreeLifecycleControllerFactory.createController(buildLifecycleController, buildTreeWorkExecutor, buildTreeFinishExecutor);
     }
 
     public void attach() {
         buildServices.get(BuildStateRegistry.class).attachRootBuild(this);
+    }
+
+    @Override
+    protected BuildLifecycleController getBuildController() {
+        return buildLifecycleController;
+    }
+
+    @Override
+    public BuildWorkGraph getWorkGraph() {
+        return buildServices.get(BuildWorkGraph.class);
     }
 
     @Override

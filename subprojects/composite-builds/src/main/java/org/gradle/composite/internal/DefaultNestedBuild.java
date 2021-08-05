@@ -26,6 +26,7 @@ import org.gradle.internal.build.AbstractBuildState;
 import org.gradle.internal.build.BuildLifecycleController;
 import org.gradle.internal.build.BuildLifecycleControllerFactory;
 import org.gradle.internal.build.BuildState;
+import org.gradle.internal.build.ExecutionResult;
 import org.gradle.internal.build.StandAloneNestedBuild;
 import org.gradle.internal.buildtree.BuildModelParameters;
 import org.gradle.internal.buildtree.BuildTreeFinishExecutor;
@@ -38,9 +39,9 @@ import org.gradle.internal.concurrent.Stoppable;
 import org.gradle.internal.service.scopes.BuildScopeServices;
 import org.gradle.util.Path;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.util.List;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 class DefaultNestedBuild extends AbstractBuildState implements StandAloneNestedBuild, Stoppable {
@@ -51,27 +52,30 @@ class DefaultNestedBuild extends AbstractBuildState implements StandAloneNestedB
     private final BuildDefinition buildDefinition;
     private final BuildLifecycleController buildLifecycleController;
     private final BuildTreeLifecycleController buildTreeLifecycleController;
+    private final BuildScopeServices buildScopeServices;
 
-    DefaultNestedBuild(BuildIdentifier buildIdentifier,
-                       Path identityPath,
-                       BuildDefinition buildDefinition,
-                       BuildState owner,
-                       BuildTreeState buildTree,
-                       BuildLifecycleControllerFactory buildLifecycleControllerFactory,
-                       ProjectStateRegistry projectStateRegistry) {
+    DefaultNestedBuild(
+        BuildIdentifier buildIdentifier,
+        Path identityPath,
+        BuildDefinition buildDefinition,
+        BuildState owner,
+        BuildTreeState buildTree,
+        BuildLifecycleControllerFactory buildLifecycleControllerFactory,
+        ProjectStateRegistry projectStateRegistry
+    ) {
         this.buildIdentifier = buildIdentifier;
         this.identityPath = identityPath;
         this.buildDefinition = buildDefinition;
         this.owner = owner;
         this.projectStateRegistry = projectStateRegistry;
 
-        BuildScopeServices buildScopeServices = new BuildScopeServices(buildTree.getServices());
-        this.buildLifecycleController = buildLifecycleControllerFactory.newInstance(buildDefinition, this, owner.getMutableModel(), buildScopeServices);
+        buildScopeServices = new BuildScopeServices(buildTree.getServices());
+        this.buildLifecycleController = buildLifecycleControllerFactory.newInstance(buildDefinition, this, owner, buildScopeServices);
 
-        IncludedBuildControllers controllers = buildScopeServices.get(IncludedBuildControllers.class);
+        IncludedBuildTaskGraph taskGraph = buildScopeServices.get(IncludedBuildTaskGraph.class);
         ExceptionAnalyser exceptionAnalyser = buildScopeServices.get(ExceptionAnalyser.class);
         BuildModelParameters modelParameters = buildScopeServices.get(BuildModelParameters.class);
-        BuildTreeWorkExecutor workExecutor = new DefaultBuildTreeWorkExecutor(controllers, buildLifecycleController);
+        BuildTreeWorkExecutor workExecutor = new DefaultBuildTreeWorkExecutor(taskGraph, buildLifecycleController);
         BuildTreeLifecycleControllerFactory buildTreeLifecycleControllerFactory = buildScopeServices.get(BuildTreeLifecycleControllerFactory.class);
 
         // On completion of the action, finish only this build and do not finish any other builds
@@ -79,11 +83,16 @@ class DefaultNestedBuild extends AbstractBuildState implements StandAloneNestedB
         // The root build will take care of finishing this build later, if not finished now
         BuildTreeFinishExecutor finishExecutor;
         if (modelParameters.isRequiresBuildModel()) {
-            finishExecutor = new DoNothingBuildFinishExecutor();
+            finishExecutor = new DoNothingBuildFinishExecutor(exceptionAnalyser);
         } else {
             finishExecutor = new FinishThisBuildOnlyFinishExecutor(exceptionAnalyser);
         }
         buildTreeLifecycleController = buildTreeLifecycleControllerFactory.createController(buildLifecycleController, workExecutor, finishExecutor);
+    }
+
+    @Override
+    protected BuildLifecycleController getBuildController() {
+        return buildLifecycleController;
     }
 
     @Override
@@ -112,8 +121,8 @@ class DefaultNestedBuild extends AbstractBuildState implements StandAloneNestedB
     }
 
     @Override
-    public void finishBuild(Consumer<? super Throwable> collector) {
-        buildLifecycleController.finishBuild(null, collector);
+    public ExecutionResult<Void> finishBuild() {
+        return buildLifecycleController.finishBuild(null);
     }
 
     @Override
@@ -152,8 +161,16 @@ class DefaultNestedBuild extends AbstractBuildState implements StandAloneNestedB
     }
 
     private static class DoNothingBuildFinishExecutor implements BuildTreeFinishExecutor {
+        private final ExceptionAnalyser exceptionAnalyser;
+
+        public DoNothingBuildFinishExecutor(ExceptionAnalyser exceptionAnalyser) {
+            this.exceptionAnalyser = exceptionAnalyser;
+        }
+
         @Override
-        public void finishBuildTree(List<Throwable> failures, Consumer<? super Throwable> finishFailures) {
+        @Nullable
+        public RuntimeException finishBuildTree(List<Throwable> failures) {
+            return exceptionAnalyser.transform(failures);
         }
     }
 
@@ -165,9 +182,11 @@ class DefaultNestedBuild extends AbstractBuildState implements StandAloneNestedB
         }
 
         @Override
-        public void finishBuildTree(List<Throwable> failures, Consumer<? super Throwable> finishFailures) {
+        @Nullable
+        public RuntimeException finishBuildTree(List<Throwable> failures) {
             RuntimeException reportable = exceptionAnalyser.transform(failures);
-            buildLifecycleController.finishBuild(reportable, finishFailures);
+            ExecutionResult<Void> finishResult = buildLifecycleController.finishBuild(reportable);
+            return exceptionAnalyser.transform(ExecutionResult.maybeFailed(reportable).withFailures(finishResult).getFailures());
         }
     }
 }

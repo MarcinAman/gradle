@@ -24,6 +24,7 @@ import org.gradle.initialization.exception.ExceptionAnalyser
 import org.gradle.internal.build.BuildLifecycleController
 import org.gradle.internal.build.BuildLifecycleControllerFactory
 import org.gradle.internal.build.BuildState
+import org.gradle.internal.build.ExecutionResult
 import org.gradle.internal.buildtree.BuildModelParameters
 import org.gradle.internal.buildtree.BuildTreeLifecycleController
 import org.gradle.internal.buildtree.BuildTreeState
@@ -39,25 +40,23 @@ class DefaultNestedBuildTest extends Specification {
     def tree = Mock(BuildTreeState)
     def factory = Mock(BuildLifecycleControllerFactory)
     def controller = Mock(BuildLifecycleController)
-    def parentGradle = Mock(GradleInternal)
     def gradle = Mock(GradleInternal)
     def action = Mock(Function)
     def sessionServices = new DefaultServiceRegistry()
     def buildDefinition = Mock(BuildDefinition)
     def buildIdentifier = Mock(BuildIdentifier)
     def projectStateRegistry = Mock(ProjectStateRegistry)
-    def includedBuildControllers = Mock(IncludedBuildControllers)
+    def includedBuildTaskGraph = Mock(IncludedBuildTaskGraph)
     def exceptionAnalyzer = Mock(ExceptionAnalyser)
 
     DefaultNestedBuild build() {
         _ * owner.currentPrefixForProjectsInChildBuilds >> Path.path(":owner")
-        _ * owner.mutableModel >> parentGradle
-        _ * factory.newInstance(buildDefinition, _, parentGradle, _) >> controller
+        _ * factory.newInstance(buildDefinition, _, owner, _) >> controller
         _ * buildDefinition.name >> "nested"
         sessionServices.add(Stub(BuildOperationExecutor))
-        sessionServices.add(includedBuildControllers)
         sessionServices.add(exceptionAnalyzer)
         sessionServices.add(new TestBuildTreeLifecycleControllerFactory())
+        sessionServices.add(includedBuildTaskGraph)
         _ * tree.services >> sessionServices
         _ * controller.gradle >> gradle
 
@@ -91,8 +90,9 @@ class DefaultNestedBuildTest extends Specification {
             controller.scheduleAndRunTasks()
             '<result>'
         }
-        _ * exceptionAnalyzer.transform(_)
-        1 * controller.finishBuild(_, _)
+        1 * controller.executeTasks() >> ExecutionResult.succeeded()
+        1 * includedBuildTaskGraph.awaitTaskCompletion() >> ExecutionResult.succeeded()
+        1 * controller.finishBuild(_) >> ExecutionResult.succeeded()
     }
 
     def "runs action but does not finish build when model is required by root build"() {
@@ -111,7 +111,8 @@ class DefaultNestedBuildTest extends Specification {
             controller.scheduleAndRunTasks()
             '<result>'
         }
-        _ * exceptionAnalyzer.transform(_)
+        1 * controller.executeTasks() >> ExecutionResult.succeeded()
+        1 * includedBuildTaskGraph.awaitTaskCompletion() >> ExecutionResult.succeeded()
         0 * controller.finishBuild(_, _)
     }
 
@@ -131,5 +132,4 @@ class DefaultNestedBuildTest extends Specification {
             return null
         }
     }
-
 }

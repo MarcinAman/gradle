@@ -22,6 +22,7 @@ import org.gradle.api.internal.provider.DefaultConfigurationTimeBarrier
 import org.gradle.api.logging.LogLevel
 import org.gradle.api.logging.Logging
 import org.gradle.configurationcache.ConfigurationCacheRepository.CheckedFingerprint
+import org.gradle.configurationcache.extensions.uncheckedCast
 import org.gradle.configurationcache.fingerprint.ConfigurationCacheFingerprint
 import org.gradle.configurationcache.fingerprint.ConfigurationCacheFingerprintController
 import org.gradle.configurationcache.fingerprint.InvalidationReason
@@ -63,7 +64,7 @@ class DefaultConfigurationCache internal constructor(
 
         val currentBuild: VintageGradleBuild
 
-        fun createBuild(rootProjectName: String): ConfigurationCacheBuild
+        fun createBuild(settingsFile: File?, rootProjectName: String): ConfigurationCacheBuild
 
         fun <T> service(serviceType: Class<T>): T
 
@@ -72,6 +73,7 @@ class DefaultConfigurationCache internal constructor(
 
     private
     val canLoad by lazy { canLoad() }
+
     private
     var rootBuild: Host? = null
 
@@ -107,24 +109,24 @@ class DefaultConfigurationCache internal constructor(
         rootBuild = host
     }
 
-    override fun loadOrScheduledRequestedTasks(scheduler: () -> Unit) {
+    override fun loadOrScheduleRequestedTasks(scheduler: () -> Unit) {
         if (canLoad) {
-            load()
-            // This is required to signal that the task graphs are ready for execution. It should not actually end up scheduling any further tasks
-            // TODO - It would be better to have the load() method signal this instead
-            scheduler()
+            loadWorkGraph()
         } else {
             prepareForConfiguration()
             scheduler()
-            save()
+            saveWorkGraph()
         }
     }
 
-    override fun <T> loadOrCreateModel(creator: () -> T): T {
+    override fun <T : Any> loadOrCreateModel(creator: () -> T): T {
         if (canLoad) {
-            // Just do the check for now
+            return loadModel().uncheckedCast()
         }
-        return creator()
+        prepareForConfiguration()
+        val model = creator()
+        saveModel(model)
+        return model
     }
 
     private
@@ -202,7 +204,21 @@ class DefaultConfigurationCache internal constructor(
     }
 
     private
-    fun save() {
+    fun saveModel(model: Any) {
+        saveToCache(StateType.Model) { layout ->
+            cacheIO.writeModelTo(model, layout.state)
+            // TODO - separate out writing the metadata about included builds from writing the value
+            emptySet()
+        }
+    }
+
+    private
+    fun saveWorkGraph() {
+        saveToCache(StateType.Work) { layout -> writeConfigurationCacheState(layout) }
+    }
+
+    private
+    fun saveToCache(stateType: StateType, action: (ConfigurationCacheRepository.Layout) -> Set<File>) {
         crossConfigurationTimeBarrier()
 
         // TODO - fingerprint should be collected until the state file has been written, as user code can run during this process
@@ -212,12 +228,16 @@ class DefaultConfigurationCache internal constructor(
         stopCollectingCacheFingerprint()
 
         buildOperationExecutor.withStoreOperation {
-            cacheRepository.useForStore(cacheKey.string) { layout ->
+            cacheRepository.useForStore(cacheKey.string, stateType) { layout ->
                 problems.storing {
                     invalidateConfigurationCacheState(layout)
                 }
                 try {
-                    writeConfigurationCacheFiles(layout)
+                    val includedBuildRootDirs = action(layout)
+                    writeConfigurationCacheFingerprint(
+                        layout.fingerprint,
+                        ConfigurationCacheFingerprint.Header(includedBuildRootDirs)
+                    )
                 } catch (error: ConfigurationCacheError) {
                     // Invalidate state on serialization errors
                     invalidateConfigurationCacheState(layout)
@@ -232,7 +252,21 @@ class DefaultConfigurationCache internal constructor(
     }
 
     private
-    fun load() {
+    fun loadModel(): Any {
+        return loadFromCache(StateType.Model) { stateFile ->
+            cacheIO.readModelFrom(stateFile)
+        }
+    }
+
+    private
+    fun loadWorkGraph() {
+        loadFromCache(StateType.Work) { stateFile ->
+            cacheIO.readRootBuildStateFrom(stateFile)
+        }
+    }
+
+    private
+    fun <T> loadFromCache(stateType: StateType, action: (ConfigurationCacheStateFile) -> T): T {
         prepareConfigurationTimeBarrier()
         problems.loading()
 
@@ -240,12 +274,11 @@ class DefaultConfigurationCache internal constructor(
         // when loading the task graph.
         scopeRegistryListener.dispose()
 
-        buildOperationExecutor.withLoadOperation {
-            cacheRepository.useForStateLoad(cacheKey.string) { stateFile ->
-                cacheIO.readRootBuildStateFrom(stateFile)
-            }
+        val result = buildOperationExecutor.withLoadOperation {
+            cacheRepository.useForStateLoad(cacheKey.string, stateType, action)
         }
         crossConfigurationTimeBarrier()
+        return result
     }
 
     private
@@ -261,18 +294,9 @@ class DefaultConfigurationCache internal constructor(
     }
 
     private
-    fun writeConfigurationCacheFiles(layout: ConfigurationCacheRepository.Layout) {
-        val includedBuildRootDirs = writeConfigurationCacheState(layout.state)
-        writeConfigurationCacheFingerprint(
-            layout.fingerprint,
-            ConfigurationCacheFingerprint.Header(includedBuildRootDirs)
-        )
-    }
-
-    private
-    fun writeConfigurationCacheState(stateFile: ConfigurationCacheStateFile): Set<File> =
+    fun writeConfigurationCacheState(layout: ConfigurationCacheRepository.Layout): Set<File> =
         projectStateRegistry.withMutableStateOfAllProjects(
-            Factory { cacheIO.writeRootBuildStateTo(stateFile) }
+            Factory { cacheIO.writeRootBuildStateTo(layout.state) }
         )
 
     private

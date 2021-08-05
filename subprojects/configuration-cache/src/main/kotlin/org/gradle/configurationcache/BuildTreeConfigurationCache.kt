@@ -26,12 +26,12 @@ interface BuildTreeConfigurationCache {
      * Loads the scheduled tasks from cache, if available, or else runs the given function to schedule the tasks and then
      * writes the result to cache.
      */
-    fun loadOrScheduledRequestedTasks(scheduler: () -> Unit)
+    fun loadOrScheduleRequestedTasks(scheduler: () -> Unit)
 
     /**
      * Loads the cached model, if available, or else runs the given function to create it and then writes the result to cache.
      */
-    fun <T> loadOrCreateModel(creator: () -> T): T
+    fun <T : Any> loadOrCreateModel(creator: () -> T): T
 
     // This is a temporary property to allow migration from a root build scoped cache to a build tree scoped cache
     val isLoaded: Boolean

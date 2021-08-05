@@ -16,10 +16,9 @@
 
 package org.gradle.configurationcache
 
-import org.gradle.composite.internal.IncludedBuildControllers
+import org.gradle.composite.internal.IncludedBuildTaskGraph
 import org.gradle.configurationcache.extensions.get
 import org.gradle.configurationcache.initialization.ConfigurationCacheStartParameter
-import org.gradle.initialization.exception.ExceptionAnalyser
 import org.gradle.internal.build.BuildLifecycleController
 import org.gradle.internal.buildtree.BuildTreeFinishExecutor
 import org.gradle.internal.buildtree.BuildTreeLifecycleController
@@ -33,15 +32,14 @@ import org.gradle.internal.buildtree.DefaultBuildTreeWorkPreparer
 class DefaultBuildTreeLifecycleControllerFactory(
     private val startParameter: ConfigurationCacheStartParameter,
     private val cache: BuildTreeConfigurationCache,
-    private val controllers: IncludedBuildControllers,
-    private val exceptionAnalyser: ExceptionAnalyser
+    private val taskGraph: IncludedBuildTaskGraph,
 ) : BuildTreeLifecycleControllerFactory {
     override fun createController(targetBuild: BuildLifecycleController, workExecutor: BuildTreeWorkExecutor, finishExecutor: BuildTreeFinishExecutor): BuildTreeLifecycleController {
         // Currently, apply the decoration only to the root build, as the cache implementation is still scoped to the root build
         // (that is, it assumes it is only applied to the root build)
         val rootBuild = targetBuild.gradle.isRootBuild
 
-        val defaultWorkPreparer = DefaultBuildTreeWorkPreparer(targetBuild, controllers)
+        val defaultWorkPreparer = DefaultBuildTreeWorkPreparer(targetBuild, taskGraph)
         val workPreparer = if (startParameter.isEnabled && rootBuild) {
             ConfigurationCacheAwareBuildTreeWorkPreparer(defaultWorkPreparer, cache)
         } else {
@@ -60,6 +58,6 @@ class DefaultBuildTreeLifecycleControllerFactory(
             cache.attachRootBuild(targetBuild.gradle.services.get())
         }
 
-        return DefaultBuildTreeLifecycleController(targetBuild, workPreparer, workExecutor, modelCreator, finishExecutor, exceptionAnalyser)
+        return DefaultBuildTreeLifecycleController(targetBuild, taskGraph, workPreparer, workExecutor, modelCreator, finishExecutor)
     }
 }

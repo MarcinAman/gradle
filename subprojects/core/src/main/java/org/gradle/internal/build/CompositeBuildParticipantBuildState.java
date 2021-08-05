@@ -30,7 +30,7 @@ public interface CompositeBuildParticipantBuildState extends BuildState {
     IncludedBuildInternal getModel();
 
     /**
-     * Identities of the modules represented by the projects of this build.
+     * Returns the identities of the modules represented by the projects of this build. May configure the build model, if required.
      */
     Set<Pair<ModuleVersionIdentifier, ProjectComponentIdentifier>> getAvailableModules();
 
@@ -39,4 +39,8 @@ public interface CompositeBuildParticipantBuildState extends BuildState {
      */
     ProjectComponentIdentifier idToReferenceProjectFromAnotherBuild(ProjectComponentIdentifier identifier);
 
+    /**
+     * Returns the work graph for this build.
+     */
+    BuildWorkGraph getWorkGraph();
 }

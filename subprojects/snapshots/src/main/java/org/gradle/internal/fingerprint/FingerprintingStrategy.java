@@ -16,6 +16,7 @@
 
 package org.gradle.internal.fingerprint;
 
+import org.gradle.internal.hash.HashCode;
 import org.gradle.internal.snapshot.FileSystemLocationSnapshot;
 import org.gradle.internal.snapshot.FileSystemSnapshot;
 
@@ -50,5 +51,5 @@ public interface FingerprintingStrategy {
 
     String normalizePath(FileSystemLocationSnapshot snapshot);
 
-    DirectorySensitivity getDirectorySensitivity();
+    HashCode getConfigurationHash();
 }

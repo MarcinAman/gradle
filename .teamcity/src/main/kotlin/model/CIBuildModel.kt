@@ -8,7 +8,7 @@ import common.VersionedSettingsBranch
 import configurations.BaseGradleBuildType
 import configurations.BuildDistributions
 import configurations.CheckLinks
-import configurations.CompileAll
+import configurations.CompileAllProduction
 import configurations.FunctionalTest
 import configurations.Gradleception
 import configurations.SanityCheck
@@ -260,8 +260,7 @@ data class TestCoverage(
     val vendor: JvmVendor = JvmVendor.oracle,
     val buildJvmVersion: JvmVersion = JvmVersion.java11,
     val expectedBucketNumber: Int = 50,
-    val withoutDependencies: Boolean = false,
-    val testDistribution: Boolean = false
+    val withoutDependencies: Boolean = false
 ) {
 
     constructor(
@@ -271,10 +270,8 @@ data class TestCoverage(
         testJvm: JvmCategory,
         buildJvmVersion: JvmVersion = JvmVersion.java11,
         expectedBucketNumber: Int = 50,
-        withoutDependencies: Boolean = false,
-        testDistribution: Boolean = false
-    ) :
-        this(uuid, testType, os, testJvm.version, testJvm.vendor, buildJvmVersion, expectedBucketNumber, withoutDependencies, testDistribution)
+        withoutDependencies: Boolean = false
+    ) : this(uuid, testType, os, testJvm.version, testJvm.vendor, buildJvmVersion, expectedBucketNumber, withoutDependencies)
 
     fun asId(projectId: String): String {
         return "${projectId}_$testCoveragePrefix"
@@ -388,7 +385,7 @@ const val GRADLE_BUILD_SMOKE_TEST_NAME = "gradleBuildSmokeTest"
 enum class SpecificBuild {
     CompileAll {
         override fun create(model: CIBuildModel, stage: Stage): BaseGradleBuildType {
-            return CompileAll(model, stage)
+            return CompileAllProduction(model, stage)
         }
     },
     SanityCheck {

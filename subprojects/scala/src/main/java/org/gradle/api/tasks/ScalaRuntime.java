@@ -99,28 +99,35 @@ public class ScalaRuntime {
 
             private Configuration inferScalaClasspath() {
                 File scalaLibraryJar = findScalaJar(classpath, "library");
-                if (scalaLibraryJar == null) {
+                File scala3LibraryJar = findScalaJar(classpath, "library_3");
+                boolean isScala3 = scala3LibraryJar != null;
+                if (scalaLibraryJar == null && scala3LibraryJar == null) {
                     throw new GradleException(String.format("Cannot infer Scala class path because no Scala library Jar was found. "
                             + "Does %s declare dependency to scala-library? Searched classpath: %s.", project, classpath));
                 }
 
-                String scalaVersion = getScalaVersion(scalaLibraryJar);
+                String scalaVersion;
+                if (isScala3) {
+                    scalaVersion = getScalaVersion(scala3LibraryJar);
+                } else {
+                    scalaVersion = getScalaVersion(scalaLibraryJar);
+                }
                 if (scalaVersion == null) {
                     throw new AssertionError(String.format("Unexpectedly failed to parse version of Scala Jar file: %s in %s", scalaLibraryJar, project));
                 }
 
                 String zincVersion = project.getExtensions().getByType(ScalaPluginExtension.class).getZincVersion().get();
 
-//                String scalaMajorMinorVersion = Joiner.on('.').join(Splitter.on('.').splitToList(scalaVersion).subList(0, 2));
-                DefaultExternalModuleDependency compilerBridgeJar = new DefaultExternalModuleDependency("org.scala-lang", "scala3-sbt-bridge", scalaVersion);
+                DefaultExternalModuleDependency compilerBridgeJar = getScalaBridgeDependency(scalaVersion, zincVersion);
                 compilerBridgeJar.setTransitive(false);
                 compilerBridgeJar.artifact(artifact -> {
+                    if (!isScala3) artifact.setClassifier("sources");
                     artifact.setType("jar");
                     artifact.setExtension("jar");
                     artifact.setName(compilerBridgeJar.getName());
                 });
-                DefaultExternalModuleDependency compilerInterfaceJar = new DefaultExternalModuleDependency("org.scala-sbt", "compiler-interface", zincVersion);
-                Configuration scalaRuntimeClasspath = project.getConfigurations().detachedConfiguration(new DefaultExternalModuleDependency("org.scala-lang", "scala3-compiler_3", scalaVersion), compilerBridgeJar, compilerInterfaceJar);
+                DefaultExternalModuleDependency compilerInterfaceJar = getScalaCompilerInterfaceDependency(scalaVersion, zincVersion);
+                Configuration scalaRuntimeClasspath = project.getConfigurations().detachedConfiguration(getScalaCompilerDependency(scalaVersion), compilerBridgeJar, compilerInterfaceJar);
                 jvmEcosystemUtilities.configureAsRuntimeClasspath(scalaRuntimeClasspath);
                 return scalaRuntimeClasspath;
             }
@@ -170,5 +177,50 @@ public class ScalaRuntime {
     public String getScalaVersion(File scalaJar) {
         Matcher matcher = SCALA_JAR_PATTERN.matcher(scalaJar.getName());
         return matcher.matches() ? matcher.group(2) : null;
+    }
+
+    /**
+     * Determines Scala bridge jar to download. In Scala 3 it is released for each Scala
+     * version together with the compiler jars.
+     *
+     * @param scalaVersion version of scala to download the bridge for
+     * @param zincVersion version of zinc relevant for Scala 2
+     * @return bridge dependency to download
+     */
+    private DefaultExternalModuleDependency getScalaBridgeDependency(String scalaVersion, String zincVersion) {
+        if (scalaVersion.startsWith("3.")) {
+            return new DefaultExternalModuleDependency("org.scala-lang", "scala3-sbt-bridge", scalaVersion);
+        } else {
+            String scalaMajorMinorVersion = Joiner.on('.').join(Splitter.on('.').splitToList(scalaVersion).subList(0, 2));
+            return new DefaultExternalModuleDependency("org.scala-sbt", "compiler-bridge_" + scalaMajorMinorVersion, zincVersion);
+        }
+    }
+
+    /**
+     * Determines Scala compiler jar to download.
+     *
+     * @param scalaVersion version of scala to download the compiler for
+     * @return bridge dependency to download
+     */
+    private DefaultExternalModuleDependency getScalaCompilerDependency(String scalaVersion) {
+        if (scalaVersion.startsWith("3.")) {
+            return new DefaultExternalModuleDependency("org.scala-lang", "scala3-compiler_3", scalaVersion);
+        } else {
+            return new DefaultExternalModuleDependency("org.scala-lang", "scala-compiler", scalaVersion);
+        }
+    }
+    /**
+     * Determines Scala compiler jar to download.
+     *
+     * @param scalaVersion version of scala to download the compiler for
+     * @return bridge dependency to download
+     */
+    private DefaultExternalModuleDependency getScalaCompilerInterfaceDependency(String scalaVersion, String zincVersion) {
+//        if (scalaVersion.startsWith("3.")) {
+//            return new DefaultExternalModuleDependency("org.scala-lang", "scala3-interfaces", scalaVersion);
+//        } else {
+//            return new DefaultExternalModuleDependency("org.scala-sbt", "compiler-interface", zincVersion);
+//        }
+        return new DefaultExternalModuleDependency("org.scala-sbt", "compiler-interface", zincVersion);
     }
 }

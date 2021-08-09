@@ -17,11 +17,9 @@
 package org.gradle.api.internal.tasks.scala;
 
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Iterators;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.cache.CacheRepository;
-import org.gradle.cache.FileLockManager;
 import org.gradle.cache.PersistentCache;
 import org.gradle.internal.classpath.ClassPath;
 import org.gradle.internal.classpath.DefaultClassPath;
@@ -47,9 +45,7 @@ import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -58,7 +54,6 @@ import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
-import static org.gradle.cache.internal.filelock.LockOptionsBuilder.mode;
 
 @SuppressWarnings("deprecation")
 public class ZincScalaCompilerFactory {
@@ -101,27 +96,27 @@ public class ZincScalaCompilerFactory {
         String javaVersion = Jvm.current().getJavaVersion().getMajorVersion();
         String zincCacheKey = String.format("zinc-%s_%s_%s", zincVersion, scalaVersion, javaVersion);
         String zincCacheName = String.format("%s compiler cache", zincCacheKey);
-        final PersistentCache zincCache = cacheRepository.cache(zincCacheKey)
-            .withDisplayName(zincCacheName)
-            .withLockOptions(mode(FileLockManager.LockMode.OnDemand))
-            .open();
+//        final PersistentCache zincCache = cacheRepository.cache(zincCacheKey)
+//            .withDisplayName(zincCacheName)
+//            .withLockOptions(mode(FileLockManager.LockMode.OnDemand))
+//            .open();
 
         File classpathBridgeJar = findFile("scala3-sbt-bridge", hashedScalaClasspath.getClasspath());
 
-        File bridgeJar = new File(zincCache.getBaseDir(), "compiler-bridge.jar");
-        if (!bridgeJar.exists()) {
-            zincCache.useCache(() -> {
-                try {
-                    Files.copy(classpathBridgeJar.toPath(), (new File(zincCache.getBaseDir(), "compiler-bridge.jar")).toPath(), StandardCopyOption.REPLACE_EXISTING).toFile();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            });
-        }
+//        File bridgeJar = new File(zincCache.getBaseDir(), "compiler-bridge.jar");
+//        if (!bridgeJar.exists()) {
+//            zincCache.useCache(() -> {
+//                try {
+//                    Files.copy(classpathBridgeJar.toPath(), (new File(zincCache.getBaseDir(), "compiler-bridge.jar")).toPath(), StandardCopyOption.REPLACE_EXISTING).toFile();
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
+//            });
+//        }
 
         ScalaCompiler scalaCompiler = new AnalyzingCompiler(
             scalaInstance,
-            ZincUtil.constantBridgeProvider(scalaInstance, bridgeJar),
+            ZincUtil.constantBridgeProvider(scalaInstance, classpathBridgeJar),
             ClasspathOptionsUtil.manual(),
             k -> scala.runtime.BoxedUnit.UNIT,
             Option.apply(COMPILER_CLASSLOADER_CACHE)

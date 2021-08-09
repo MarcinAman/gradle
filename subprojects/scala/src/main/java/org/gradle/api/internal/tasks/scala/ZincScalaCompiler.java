@@ -178,7 +178,7 @@ public class ZincScalaCompiler implements Compiler<ScalaJavaJointCompileSpec> {
 
     private static VirtualFile[] convertToVirtualFilesByPath(Iterable<File> files){
         FileConverter fileConverter = MappedFileConverter.empty();
-        return StreamSupport.stream(files.spliterator(), false).map((file) -> fileConverter.toVirtualFile(file.toPath())).toArray(VirtualFile[]::new);
+        return StreamSupport.stream(files.spliterator(), false).map(file -> fileConverter.toVirtualFile(file.toPath())).toArray(VirtualFile[]::new);
     }
 
     private class EntryLookup implements PerClasspathEntryLookup {
@@ -215,15 +215,12 @@ public class ZincScalaCompiler implements Compiler<ScalaJavaJointCompileSpec> {
     private static class ExternalBinariesLookup implements ExternalLookup {
 
         @Override
-        public Option<Changes<File>> changedSources(CompileAnalysis previousAnalysis) {
+        public Option<Changes<VirtualFileRef>> changedSources(CompileAnalysis previousAnalysis) {
             return Option.empty();
-        public Option<AnalyzedClass> lookupAnalyzedClass(String binaryClassName, Option<VirtualFileRef> file) {
-            return null;
         }
 
-        @Override
-        public Option<Changes<VirtualFileRef>> changedSources(CompileAnalysis previousAnalysis) {
-            return none();
+        public Option<AnalyzedClass> lookupAnalyzedClass(String binaryClassName, Option<VirtualFileRef> file) {
+            return null;
         }
 
         @Override
@@ -256,12 +253,9 @@ public class ZincScalaCompiler implements Compiler<ScalaJavaJointCompileSpec> {
 
         @Override
         public Option<Set<VirtualFileRef>> removedProducts(CompileAnalysis previousAnalysis) {
-            return new Some<>(new HashSet<>());
+            return Option.empty();
         }
 
-        @Override
-        public Option<Set<File>> removedProducts(CompileAnalysis previousAnalysis) {
-            return Option.empty();
         public Optional<java.util.Set<VirtualFileRef>> getRemovedProducts(CompileAnalysis previousAnalysis) {
             return Optional.of(new java.util.HashSet<>());
         }
